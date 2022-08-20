@@ -5,6 +5,7 @@ import sqlite3
 import asyncio
 import logging
 import requests
+import json
 
 import os
 from dotenv import load_dotenv
@@ -34,6 +35,11 @@ async def on_ready():
         print("Essential tables not detected, created them.")
     else:
         print("Tables already exist.")
+        cur.execute("SELECT CurSeason, CurRound, Entries FROM Timeline")
+        seasonroundentries = cur.fetchone()
+        curseason = str(seasonroundentries[0])
+        curround = str(seasonroundentries[1])
+        entriesopen = seasonroundentries[2]
     conn.commit()
     cur.close()
 
@@ -44,42 +50,33 @@ async def directmessage(message):
     if message.author == bot.user or type(message.channel) != discord.channel.DMChannel:
         return
     content = message.content
-    content = content.title()
+    content = content.upper()
     if message.author.id == 248740105248964608 and content[0] == "!":
         return
-    conn = sqlite3.connect('3cb.db')
-    cur = conn.cursor()
-    cur.execute("Select Entries FROM Timeline")
-    if cur.fetchone()[0] != 1:
+    if entriesopen != 1:
         await message.channel.send("Sorry, entries are closed right now.")
         return
     user = message.author.id
+    conn = sqlite3.connect('3cb.db')
+    cur = conn.cursor()
     cur.execute(f"SELECT ID, Active from User WHERE DiscordID = {str(user)}")
     result = cur.fetchone()
-    if result == None:
-        await message.channel.send("Sorry, you're not enrolled. Please use !join in the 3CB channel.")
-        return
-    elif result[1] == 0:
+    if result == None or result[1] == 0:
         await message.channel.send("Sorry, you're not enrolled. Please use !join in the 3CB channel.")
         return
     userid = result[0]
     username = message.author.name
     print(f"{username} {content}")
-    cur.execute("SELECT CurSeason, CurRound FROM Timeline")
-    seasonround = cur.fetchone()
-    cur.execute("UPDATE Temp SET Card = ?", (content,))
-    conn.commit()
-    cur.execute("SELECT Card FROM Temp")
-    content = str(cur.fetchone()[0])
-    cardtarget = "RoundentriesS"+str(seasonround[0])+"R"+str(seasonround[1])
-    params = {"exact":content,"format":"image"}
+    cardtarget = f"RoundentriesS{curseason}R{curround}"
+    params = {"fuzzy":content,"format":"json"}
     api = "https://api.scryfall.com/cards/named"
     response = requests.get(api,params=params)
     if response.status_code == 404:
         await message.channel.send("Sorry, card not found in Scryfall. Could you please check your spelling, and make sure it is Vintage legal.")
         return
-    scryfalllink = response.url
-    #print(scryfalllink)
+    responsejson = response.json
+    scryfalllink = json.loads(responsejson)[scryfall_uri]
+
     cur.execute(f"SELECT Card1, Card2, Card3 FROM {cardtarget} WHERE UserID = {str(userid)}")
     cards = cur.fetchone()
     if cards == None:
@@ -94,13 +91,6 @@ async def directmessage(message):
     elif cards[2] == None:
         cur.execute(f"UPDATE {cardtarget} SET Card3 = ?, Card3URL = '{scryfalllink}' WHERE UserID = {str(userid)}", (content,))
         await message.channel.send(f"Your deck is currently recorded as {cards[0]}, {cards[1]} and {content}. If you want to submit a new deck, just enter a new card and it will overwrite your previous deck.")
-        cur.execute(f"SELECT COUNT(ID) FROM User")
-        count = cur.fetchone()[0]
-
-        #if count >= 20:
-        #    cur.execute("UPDATE Timeline SET Entries = 0")
-        #    user = await bot.fetch_user(248740105248964608)
-        #    await user.send("Max users reached, entries closed.")
     conn.commit()
     cur.close()
     print("added to db")
