@@ -11,47 +11,74 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 token = os.getenv('3CB_TOKEN')
+owner = os.getevn('OWNER_ID')
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 
 #logging.basicConfig(filename='pricebotlog.txt', encoding='utf-8', level=print, format='%(asctime)s | %(levelname)s:%(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 
+curseason = 0
+curround = 0
+entriesopen = 0
+channelid = 0
+count = 0
+
 @bot.event
 async def on_ready():
-    print("Bot online")
-    user = await bot.fetch_user(248740105248964608)
-    await user.send("Bot online.")
+    #user = await bot.fetch_user(owner)
+    #await user.send("Bot online.")
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
+    global curseason
+    global curround
+    global entriesopen
+    global channelid
+    global count
+    global cardarray
     cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name = 'Timeline'")
     if cur.fetchone() == None:
         cur.execute('CREATE TABLE "Points" ("Card" TEXT, "Points" INTEGER);')
-        cur.execute('CREATE TABLE "Timeline" ("CurSeason"	INTEGER, "CurRound" INTEGER, "Entries" INTEGER, "Channel" INTEGER, "Role" INTEGER);')
+        cur.execute('CREATE TABLE "Timeline" ("CurSeason"	INTEGER, "CurRound" INTEGER, "Entries" INTEGER, "Channel" INTEGER);')
         cur.execute('CREATE TABLE "User" ("ID" INTEGER UNIQUE, "DiscordID" TEXT UNIQUE, "Active" INTEGER, PRIMARY KEY("ID" AUTOINCREMENT));')
-        cur.execute('CREATE TABLE "Temp" ("Card" TEXT)')
-        cur.execute("INSERT INTO Timeline (CurSeason, CurRound, Entries, Channel) VALUES (0, 0, 0, 0)")
-        cur.execute("INSERT INTO Temp (Card) VALUES ('Hello')")
+        cur.execute("INSERT INTO Timeline (CurSeason, CurRound, Entries, ChannelID) VALUES (0, 0, 0, 0)")
         print("Essential tables not detected, created them.")
+
     else:
         print("Tables already exist.")
-        cur.execute("SELECT CurSeason, CurRound, Entries FROM Timeline")
+        cur.execute("SELECT CurSeason, CurRound, Entries, ChannelID FROM Timeline")
         seasonroundentries = cur.fetchone()
         curseason = str(seasonroundentries[0])
         curround = str(seasonroundentries[1])
         entriesopen = seasonroundentries[2]
+        channelid = seasonroundentries[3]
+        try:
+            roundname = f"roundentriesS{curseason}R{curround}"
+            cur.execute(f"SELECT COUNT(Card3) FROM {roundname} WHERE Card3 IS NOT NULL")
+            count = cur.fetchone()[0]
+            print(f"There are {count} player entries in S{curseason}R{curround}")
+        except:
+            print("No round entries table yet.")
+    if entriesopen = 1:
+        nickname = "3CBBOT[OPEN]"
+    else:
+        nickname = "3CBBOT[CLOSED]"
+    await bot.get_guild(422240248110776322).me.edit(nick=nickname)
+    await bot.get_guild(993978823471276172).me.edit(nick=nickname)
+    status = f"Entries: {count} | S{curseason}R{curround}"
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=status))
     conn.commit()
     cur.close()
+    print("Bot online")
 
-
-#ENTRIES
+#PLAYER ENTRIES
 @bot.listen('on_message')
 async def directmessage(message):
+    global count
     if message.author == bot.user or type(message.channel) != discord.channel.DMChannel:
         return
     content = message.content
-    content = content.upper()
-    if message.author.id == 248740105248964608 and content[0] == "!":
+    if message.author.id == owner and content[0] == "!":
         return
     if entriesopen != 1:
         await message.channel.send("Sorry, entries are closed right now.")
@@ -59,9 +86,9 @@ async def directmessage(message):
     user = message.author.id
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
-    cur.execute(f"SELECT ID, Active from User WHERE DiscordID = {str(user)}")
+    cur.execute(f"SELECT ID from User WHERE DiscordID = {str(user)}")
     result = cur.fetchone()
-    if result == None or result[1] == 0:
+    if result == None:
         await message.channel.send("Sorry, you're not enrolled. Please use !join in the 3CB channel.")
         return
     userid = result[0]
@@ -75,22 +102,30 @@ async def directmessage(message):
         await message.channel.send("Sorry, card not found in Scryfall. Could you please check your spelling, and make sure it is Vintage legal.")
         return
     responsejson = response.json
-    scryfalllink = json.loads(responsejson)[scryfall_uri]
+    scryfalllink = json.loads(responsejson)['scryfall_uri']
+    content = json.loads(responsejson)['name']
 
     cur.execute(f"SELECT Card1, Card2, Card3 FROM {cardtarget} WHERE UserID = {str(userid)}")
     cards = cur.fetchone()
     if cards == None:
         cur.execute(f"INSERT INTO {cardtarget} (UserID, Card1, Card1URL) VALUES ({userid},?,'{scryfalllink}')", (content,))
-        await message.channel.send("Your first card has been recorded as "+content+". Please enter your second card.")
+        text = f"Your first card has been recorded as {content}. Please enter your second card."
     elif cards[2] != None:
         cur.execute(f"UPDATE {cardtarget} SET Card1 = ?, Card2 = Null, Card3 = Null, Card1URL = '{scryfalllink}' WHERE UserID = {str(userid)}", (content,))
-        await message.channel.send("Your previous submission has been overridden and your first card has been recorded as "+content+". Please enter your second card.")
+        text = f"Your previous submission has been overridden and your first card has been recorded as {content}. Please enter your second card."
+        count = count - 1
+        status = f"Entries: {count} | S{curseason}R{curround}"
+        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=status))
     elif cards[1] == None:
         cur.execute(f"UPDATE {cardtarget} SET Card2 = ?, Card2URL = '{scryfalllink}' WHERE UserID = {str(userid)}", (content,))
-        await message.channel.send(f"Your second card has been recorded as {content}. Please enter your third card.")
+        text = f"Your second card has been recorded as {content}. Please enter your third card."
     elif cards[2] == None:
         cur.execute(f"UPDATE {cardtarget} SET Card3 = ?, Card3URL = '{scryfalllink}' WHERE UserID = {str(userid)}", (content,))
-        await message.channel.send(f"Your deck is currently recorded as {cards[0]}, {cards[1]} and {content}. If you want to submit a new deck, just enter a new card and it will overwrite your previous deck.")
+        text = f"Your deck is currently recorded as {cards[0]}, {cards[1]} and {content}. If you want to submit a new deck, just enter a new card and it will overwrite your previous deck."
+        count = count + 1
+        status = f"Entries: {count} | S{curseason}R{curround}"
+        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=status))
+    await message.channel.send(text)
     conn.commit()
     cur.close()
     print("added to db")
@@ -105,13 +140,9 @@ async def join(ctx):
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
     cur.execute(f"SELECT ID FROM User WHERE DiscordID = {str(discordid)}")
-    if cur.fetchone() != None:
-        cur.execute(f"UPDATE User SET Active = 1 WHERE DiscordID = {str(discordid)}")
-    else:
-        cur.execute(f"INSERT INTO User (DiscordID, Active) VALUES ({str(discordid)}, 1)")
-    cur.execute("SELECT Entries FROM Timeline")
-    entries = cur.fetchone()[0]
-    if entries == 1:
+    if cur.fetchone() == None:
+            cur.execute(f"INSERT INTO User (DiscordID, Active) VALUES ({str(discordid)}, 1)")
+    if entriesopen == 1:
         await user.send("Hi! Welcome to 3CB. Please enter your first card. If you need help, please use the !help command in 3CB Channel.")
     else:
         await user.send("Hi! Welcome to 3CB. Entries are closed, you will be pinged when they're open.")
@@ -119,60 +150,41 @@ async def join(ctx):
     cur.close()
     print(f"user {ctx.message.author.name} added")
 
-#LEAVE
-@bot.command()
-async def leave(ctx):
-    try:
-        user = ctx.message.author
-        role_get = discord.utils.get(ctx.message.guild.roles, name='3CB Enjoyer')
-        await user.remove_roles(role_get)
-    except:
-        logging.warning("Tried to use !leave, couldn't remove role")
-    conn = sqlite3.connect('3cb.db')
-    cur = conn.cursor()
-    userid = ctx.message.author.id
-    cur.execute(f"UPDATE User SET Active = 0 WHERE DiscordID = {str(userid)}")
-    conn.commit()
-    cur.close()
-
 #NEWSEASON
 @bot.command()
 async def newseason(ctx):
-    if ctx.author.id != 248740105248964608:
+    global curseason
+    if ctx.author.id != owner:
         return
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
-    cur.execute("SELECT CurSeason FROM Timeline")
-    curseason = cur.fetchone()[0]
-    targetseason = curseason+1
-    standingsname = "StandingsS"+str(targetseason)
-    cur.execute(f"UPDATE Timeline SET CurSeason = {str(targetseason)}")
+    curseason = str(int(curseason) + 1)
+    standingsname = f"StandingsS{curseason}"
+    cur.execute(f"UPDATE Timeline SET CurSeason = {curseason}, CurRound = 0, Entries = 0")
     cur.execute(f"CREATE TABLE {standingsname} ('ID' INTEGER, 'POINTS' INTEGER, PRIMARY KEY('ID' AUTOINCREMENT));")
-    cur.execute(f"UPDATE Timeline SET CurRound = 0, Entries = 0")
+    curround = 0
+    entriesopen = 0
     conn.commit()
     cur.close()
-    user = await bot.fetch_user(248740105248964608)
-    await user.send(f"Season {str(targetseason)} created. !newround next.")
+    print(f"Season {curseason} created successfully")
+
+    #user = await bot.fetch_user(owner)
+    #await user.send(f"Season {str(targetseason)} created. !newround next.")
 
 #NEWROUND
 @bot.command()
 async def newround(ctx):
-    if ctx.author.id != 248740105248964608:
+    global curround
+    if ctx.author.id != owner:
         return
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
-    cur.execute("Select CurRound, Channel FROM Timeline")
-    roundchannel = cur.fetchone()
-    channelid = roundchannel[1]
     if channelid == 0:
         await ctx.send("Channel not set")
         return
-    curround = roundchannel[0]
     curround = curround + 1
-    cur.execute("UPDATE Timeline SET CurRound = CurRound + 1, Entries = 0")
-    cur.execute("SELECT CurSeason FROM Timeline")
-    curseason = cur.fetchone()[0]
-    tablename = "RoundentriesS"+str(curseason)+"R"+str(curround)
+    cur.execute("UPDATE Timeline SET CurRound = CurRound + 1, Entries = 1")
+    tablename = f"RoundentriesS{curseason}R{curround}"
     cur.execute(f'''CREATE TABLE {tablename}
         ('ID' INTEGER UNIQUE,
         'UserID' INTEGER UNIQUE,
@@ -184,13 +196,9 @@ async def newround(ctx):
         'Card3URL' TEXT,
         'Roundpoints' INTEGER,
         PRIMARY KEY('ID' AUTOINCREMENT));''')
-    tablename = "Round"+str(curround)
-    user = await bot.fetch_user(248740105248964608)
-    await user.send("Round "+str(curround)+" created. !entries to open entries next.")
-    channel = await bot.fetch_channel(channelid)
+    print(f"Round {curround} created.")
     cur.execute("SELECT * FROM Points ORDER BY Points DESC")
     pointed = cur.fetchall()
-    print(pointed)
     if pointed == []:
         tosend = '''Hello <@&1006150320826634331>, a new round has been created and entries are now open!\n
 If you don't have the 3CB Enjoyers role, use !join\n
@@ -202,9 +210,10 @@ To submit a deck, DM the 3CBbot\n
 Please note that the following cards have points for this round, and you are only allowed 3 points maximum in your deck.\n```\n'''
         for card,points in pointed:
             tosend = tosend+f"{points} | {card}\n"
+            print(f"{card}:{points}")
         tosend = tosend + '''```Note: If you have more than 3 points, you lose all your matches!'''
+    channel = discord.get_channel(channelid)
     await channel.send(tosend)
-    cur.execute("UPDATE Timeline SET Entries = 1")
     conn.commit()
     cur.close()
 
@@ -212,11 +221,13 @@ Please note that the following cards have points for this round, and you are onl
 #ENTRIES OPEN/CLOSE
 @bot.command()
 async def close(ctx):
-    if ctx.author.id != 248740105248964608:
+    global entriesopen
+    if ctx.author.id != owner:
         return
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
     cur.execute("UPDATE Timeline SET Entries = 0")
+    entriesopen = 0
     conn.commit()
     cur.close()
     await ctx.send("Entries closed")
@@ -226,10 +237,6 @@ async def close(ctx):
 async def count(ctx):
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
-    cur.execute("SELECT CurSeason, CurRound FROM Timeline")
-    seasonround = cur.fetchone()
-    curseason = seasonround[0]
-    curround = seasonround[1]
     roundname = f"roundentriesS{curseason}R{curround}"
     cur.execute(f"SELECT COUNT(Card3) FROM {roundname} WHERE Card3 IS NOT NULL")
     count = cur.fetchone()[0]
@@ -240,7 +247,7 @@ async def count(ctx):
 #PAIRINGS
 @bot.command()
 async def pair(ctx):
-    if ctx.author.id != 248740105248964608:
+    if ctx.author.id != owner:
         return
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
@@ -260,8 +267,8 @@ async def pair(ctx):
         return
     else:
         print(f"Generating pairings for S{curseason}R{curround}")
-    roundpairingsname = "roundpairingsS" + curseason + "R" + curround
-    roundname = "roundentriesS" + curseason + "R" + curround
+    roundpairingsname = f"roundpairingsS{curseason}R{curround}"
+    roundname = f"roundentriesS{curseason}R{curround}"
     cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", (roundpairingsname,))
     if cur.fetchone() != None:
         print("Round already paired.")
@@ -331,8 +338,8 @@ async def pair(ctx):
 ➡️: Player B won a game and drew the other\n
 🅱️: Player B won both games
 '''
-        if battler1id == 248740105248964608:
-            footer = f"{footer}\nWith gasps of amazement at how anyone could come up with as cool a deck as player A's."
+        #if battler1id == owner:
+        #    footer = f"{footer}\nWith gasps of amazement at how anyone could come up with as cool a deck as player A's."
         embed.set_footer(text=footer)
         message = await channel.send(embed=embed)
         cur.execute(f"UPDATE {roundpairingsname} SET DisMessID = {message.id} WHERE Player1ID = {battle[0]} AND Player2ID = {battle[1]}")
@@ -382,7 +389,7 @@ async def on_raw_reaction_add(ctx):
             players = cur.fetchone()
             reaction = discord.utils.get(msg.reactions, emoji=ctx.emoji.name)
             print("Message ID found")
-            if ctx.user_id == 248740105248964608 or reaction.count > 3:
+            if ctx.user_id == owner or reaction.count > 3:
                 if ctx.emoji.name == '🅰️':
                     addpoints(players[0],3)
                     addpoints(players[1],0)
@@ -448,7 +455,7 @@ def addpoints(userid, points):
 
 @bot.command()
 async def endround(ctx):
-    if ctx.author.id != 248740105248964608:
+    if ctx.author.id != owner:
         return
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
@@ -495,7 +502,7 @@ async def endround(ctx):
 
 @bot.command()
 async def standings(ctx):
-    if ctx.author.id != 248740105248964608:
+    if ctx.author.id != owner:
         return
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
@@ -551,21 +558,17 @@ async def rank(ctx):
 
 @bot.command()
 async def setchannel(ctx):
-    if ctx.author.id != 248740105248964608:
+    if ctx.author.id != owner:
         return
-    role = "3CB Enjoyers"
-    user = ctx.message.author
-    roleobj = discord.utils.get(user.guild.roles, name=role)
-    roleid = roleobj.id
-    channel = ctx.channel
-    channelid = channel.id
+    newchannel = ctx.channel
+    channel = newchannel.id
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
-    cur.execute(f"UPDATE Timeline SET Channel = {channelid}, Role = {roleid}")
+    cur.execute(f"UPDATE Timeline SET Channel = {channel}")
     conn.commit()
     cur.close()
-    channel = bot.get_channel(channelid)
-    await channel.send("This channel set as default")
+    channelobj = bot.get_channel(channel)
+    await channelobj.send("This channel set as default")
 
 @bot.command()
 async def help(ctx):
@@ -600,7 +603,7 @@ The top two decks get 1 point put on each of their cards for each appearance the
 
 @bot.command()
 async def fake(ctx, loop: int):
-    if ctx.author.id != 248740105248964608:
+    if ctx.author.id != owner:
         return
     iter = 1000000
     conn = sqlite3.connect('3cb.db')
