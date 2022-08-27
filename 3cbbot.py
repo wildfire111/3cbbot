@@ -212,7 +212,7 @@ Please note that the following cards have points for this round, and you are onl
             tosend = tosend+f"{points} | {card}\n"
             print(f"{card}:{points}")
         tosend = tosend + '''```Note: If you have more than 3 points, you lose all your matches!'''
-    channel = discord.get_channel(channelid)
+    channel = await bot.fetch_channel(channelid)
     await channel.send(tosend)
     conn.commit()
     cur.close()
@@ -251,10 +251,6 @@ async def pair(ctx):
         return
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
-    cur.execute("SELECT CurSeason, Channel FROM Timeline")
-    result = cur.fetchone()
-    curseason = str(result[0])
-    channelid = result[1]
     if channelid == 0:
         print("No channel set")
         await ctx.send("No channel set")
@@ -349,13 +345,17 @@ async def pair(ctx):
     cur.close()
     for messageid in messageids:
         reactmsg = await channel.fetch_message(messageid[0])
+        array = [🅰️,⬅️,🆎,❌,➡️,🅱️]
+        for emojiname in array:
+            await reactmsg.add_reaction(emojiname)
+            await asyncio.sleep(0.5)
         #await reactmsg.add_reaction("1\N{variation selector-16}\N{combining enclosing keycap}")
-        await reactmsg.add_reaction("🅰️")
-        await reactmsg.add_reaction("⬅️")
-        await reactmsg.add_reaction("🆎")
-        await reactmsg.add_reaction("❌")
-        await reactmsg.add_reaction("➡️")
-        await reactmsg.add_reaction("🅱️")
+        #await reactmsg.add_reaction("🅰️")
+        #await reactmsg.add_reaction("⬅️")
+        #await reactmsg.add_reaction("🆎")
+        #await reactmsg.add_reaction("❌")
+        #await reactmsg.add_reaction("➡️")
+        #await reactmsg.add_reaction("🅱️")
 
 #listening to reactions
 @bot.event
@@ -373,83 +373,71 @@ async def on_raw_reaction_add(ctx):
     print("Emoji registered")
     conn = sqlite3.connect('3cb.db')
     cur = conn.cursor()
-    cur.execute('SELECT Channel, CurSeason, CurRound FROM Timeline')
-    chanseasround = cur.fetchone()
-    channelid = chanseasround[0]
-    curseason = chanseasround[1]
-    curround = chanseasround[2]
-    channel = bot.get_channel(channelid)
-    msg = await channel.fetch_message(ctx.message_id)
+    channel = await bot.get_channel(channelid)
     if ctx.channel_id == channelid:
         cur.execute(f"SELECT DisMessID from RoundpairingsS{curseason}R{curround}")
         messageids = cur.fetchall()
-        print("Channel ID found")
+        print("Emoji in correct channel")
         if (ctx.message_id,) in messageids:
+            print("Message ID found")
             cur.execute(f"SELECT Player1ID, Player2ID FROM RoundpairingsS{curseason}R{curround} WHERE DisMessID = {ctx.message_id}")
             players = cur.fetchone()
+            array = [🅰️,⬅️,🆎,❌,➡️,🅱️]
+            reactiondict = {}
+            for emojiname in array:
+                reaction = discord.utils.get(msg.reactions, emoji=emojiname)
+                if reaction != None:
+                    reactiondict[emojiname]=reaction.count
+                else:
+                    reactiondict[emojiname]=0
+            print(reactiondict)
+            highest = 0
+            highestemoji = ""
+            cont = True
+            for k,v in reactiondict:
+                if v >= highest:
+                    highest = v
+                    highestemoji = k
+                    print(f"New highest found: {highestemoji}({highest})")
+                else:
+                    print(f"{k}({v}) not higher than {highestemoji}({highest})")
+            for k,v in reactiondict:
+                if v >= highest-3 and k != highestemoji:
+                    cont = False
+                    print(f"{highestemoji}({highest}) not 3 higher than {k}({v})")
+                    break
             reaction = discord.utils.get(msg.reactions, emoji=ctx.emoji.name)
-            print("Message ID found")
-            if ctx.user_id == owner or reaction.count > 3:
+            if ctx.user_id == owner or cont = True:
                 if ctx.emoji.name == '🅰️':
-                    addpoints(players[0],3)
+                    addpoints(players[0],6)
                     addpoints(players[1],0)
                     await msg.delete()
                     #Player 1 wins both
                 elif ctx.emoji.name == '⬅️':
-                    addpoints(players[0],1)
-                    addpoints(players[1],0)
+                    addpoints(players[0],4)
+                    addpoints(players[1],1)
                     await msg.delete()
                     #Player 1 wins 1 and draws 1
                 elif ctx.emoji.name == '🆎':
-                    addpoints(players[0],1)
-                    addpoints(players[1],1)
+                    addpoints(players[0],3)
+                    addpoints(players[1],3)
                     await msg.delete()
                     #each player wins one
                 elif ctx.emoji.name == '➡️':
-                    addpoints(players[1],1)
-                    addpoints(players[0],0)
+                    addpoints(players[1],4)
+                    addpoints(players[0],1)
                     await msg.delete()
                     #player 2 wins 1 and draws 1
                 elif ctx.emoji.name == '🅱️':
-                    addpoints(players[1],3)
+                    addpoints(players[1],6)
                     addpoints(players[0],0)
                     await msg.delete()
                     #player 2 wins both
                 elif ctx.emoji.name == '❌':
-                    addpoints(players[0],0)
-                    addpoints(players[1],0)
+                    addpoints(players[0],2)
+                    addpoints(players[1],2)
                     await msg.delete()
                     #both players draw each game
-    conn.commit()
-    cur.close()
-
-
-def addpoints(userid, points):
-    print("Adding points.")
-    conn = sqlite3.connect('3cb.db')
-    cur = conn.cursor()
-    cur.execute(f"SELECT CurSeason, CurRound FROM Timeline")
-    seasonround = cur.fetchone()
-    curround = seasonround[1]
-    curseason = seasonround[0]
-    if curseason == None:
-        logging.warning("no season, can't add points")
-        return
-    cur.execute(f"SELECT Points FROM StandingsS{curseason} WHERE ID = {userid}")
-    StandingsPoints = cur.fetchone()
-    if StandingsPoints == None:
-        cur.execute(f"INSERT INTO StandingsS{curseason} (ID, Points) VALUES ({userid}, {points})")
-    else:
-        cur.execute(f"UPDATE StandingsS{curseason} SET Points = Points + {points} WHERE ID = {userid}")
-    cur.execute(f"SELECT Roundpoints FROM roundentriesS{curseason}R{curround} WHERE UserID = {userid}")
-    roundpointssql = cur.fetchone()
-    print(f"Len: {len(roundpointssql)}, {roundpointssql}")
-    if roundpointssql[0] == None:
-        cur.execute(f"UPDATE RoundentriesS{curseason}R{curround} SET Roundpoints = {points} WHERE UserID = {userid}")
-        print("a")
-    else:
-        cur.execute(f"UPDATE RoundentriesS{curseason}R{curround} SET Roundpoints = Roundpoints + {points} WHERE UserID = {userid}")
-        print("b")
     conn.commit()
     cur.close()
 
@@ -567,7 +555,7 @@ async def setchannel(ctx):
     cur.execute(f"UPDATE Timeline SET Channel = {channel}")
     conn.commit()
     cur.close()
-    channelobj = bot.get_channel(channel)
+    channelobj = await bot.get_channel(channel)
     await channelobj.send("This channel set as default")
 
 @bot.command()
