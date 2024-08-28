@@ -4,6 +4,7 @@ class EntryCards():
         self.cards = cards
         self.cardstext = cardstext
         self.cardimages = cardimages
+        self.in_db = in_db
     
     def get_cards(self):
         return [self.cards,self.cardstext,self.cardimages]

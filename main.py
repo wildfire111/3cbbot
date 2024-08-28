@@ -22,18 +22,30 @@ bot.state = 'startup'
 cogs = ['cogs.entries','cogs.controls']
 
 async def main():
+    print("Bot starting")
     for cog in cogs:
-        await bot.load_extension(cog)
+        try:
+            await bot.load_extension(cog)
+            print(f"Loaded {cog}")
+        except Exception as e:
+            print(f"Failed to load {cog}: {e}")
     utils.initialise_db()
     await bot.start(token)
     
 
 @bot.event
 async def on_ready():
-    print("Bot online")
-    user = await bot.fetch_user(248740105248964608)
-    await user.send("Bot online.")
+    bot.state = 'startup'
+    print("Synching commands")
+    # user = await bot.fetch_user(248740105248964608)
+    # await user.send("Bot online.")
     await bot.tree.sync()
+    print("Loading DB")
+    utils.load_entries_from_db(bot)
+    print("Starting DB management task")
+    asyncio.create_task(utils.add_entries_to_db(bot))
+    bot.state = 'entriesopen'
+    print(f"Bot state: {bot.state}")
     
 
 
