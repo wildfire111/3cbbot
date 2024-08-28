@@ -5,10 +5,14 @@ import sqlite3
 
 def initialise_db():
     """
-    checks the database and creates tables if they do not exist.
+    Checks the database and creates tables if they do not exist.
     """
+    # SQL commands to create necessary tables
     tables_to_create = [
-        ('Points', '''CREATE TABLE "Points" ("Card" TEXT, "Points" INTEGER);'''),
+        ('Points', '''CREATE TABLE "Points" (
+                        "Card" TEXT, 
+                        "Points" INTEGER
+                      );'''),
         ('Timeline', '''CREATE TABLE "Timeline" (
                             "CurSeason" INTEGER, 
                             "CurRound" INTEGER, 
@@ -16,26 +20,26 @@ def initialise_db():
                             "Channel" INTEGER, 
                             "Role" INTEGER
                         );'''),
-        ('User', '''CREATE TABLE "User" (
-                        "ID" INTEGER UNIQUE, 
-                        "DiscordID" TEXT UNIQUE, 
-                        "Active" INTEGER, 
-                        PRIMARY KEY("ID" AUTOINCREMENT)
-                    );''')
+        ('UserCardEntries', '''CREATE TABLE "UserCardEntries" (
+                                "DiscordID" TEXT UNIQUE PRIMARY KEY, 
+                                "Cards" TEXT, 
+                                "CardsText" TEXT, 
+                                "CardImages" TEXT
+                               );''')
     ]
     
-    #use context manager to handle connection and cursor
+    # Use context manager to handle connection and cursor
     with sqlite3.connect('3cb.db') as conn:
         cur = conn.cursor()
         
-        #check if timeline table exists
+        # Check if the Timeline table exists
         cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name = 'Timeline'")
         if cur.fetchone() is None:
-            #if timeline does not exist, create all required tables
+            # If Timeline does not exist, create all required tables
             for table_name, create_statement in tables_to_create:
                 cur.execute(create_statement)
             
-            #insert initial data
+            # Insert initial data into the Timeline table
             cur.execute("INSERT INTO Timeline (CurSeason, CurRound, Entries, Channel) VALUES (0, 0, 0, 0)")
             print("Tables initialised.")
         else:
