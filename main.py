@@ -40,6 +40,8 @@ async def on_ready():
     # user = await bot.fetch_user(248740105248964608)
     # await user.send("Bot online.")
     await bot.tree.sync()
+    bot.battles = []
+    bot.entries = {}
     print("Loading DB")
     utils.load_entries_from_db(bot)
     print("Starting DB management task")
