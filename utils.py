@@ -20,7 +20,7 @@ def initialise_db():
                             "CurRound" INTEGER, 
                             "Entries" INTEGER, 
                             "Channel" INTEGER, 
-                            "Role" INTEGER
+                            "State" TEXT
                         );'''),
         ('UserCardEntries', '''CREATE TABLE "UserCardEntries" (
                                 "DiscordID" TEXT UNIQUE PRIMARY KEY, 
@@ -42,7 +42,7 @@ def initialise_db():
                 cur.execute(create_statement)
             
             # Insert initial data into the Timeline table
-            cur.execute("INSERT INTO Timeline (CurSeason, CurRound, Entries, Channel) VALUES (0, 0, 0, 0)")
+            cur.execute("INSERT INTO Timeline (CurSeason, CurRound, Channel, State) VALUES (0, 0, 0, 'startup')")
             print("Tables initialised.")
         else:
             print("Tables present.")
@@ -72,7 +72,6 @@ async def add_entries_to_db(bot):
     Periodically checks bot.entries for entries that have in_db=False,
     adds them to the database, and updates their in_db status.
     """
-    
     while True:
         if bot.state == 'entriesopen':
             for discord_id, entry in bot.entries.items():
@@ -97,3 +96,48 @@ async def add_entries_to_db(bot):
             
         # Wait for 15 seconds before scanning again
         await asyncio.sleep(15)
+
+def load_timeline_values(bot):
+        """Loads values from the Timeline table and sets them as attributes on the bot."""
+        try:
+            with sqlite3.connect('3cb.db') as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT CurSeason, CurRound, Channel, State FROM Timeline")
+                result = cur.fetchone()
+                if result:
+                    # Set bot attributes
+                    bot.season = result[0]
+                    bot.round = result[1]
+                    bot.channel = result[2]
+                    bot.state = result[3]
+                else:
+                    # Set default values if nothing is found
+                    bot.season = 0
+                    bot.round = 0
+                    bot.channel = None
+                    bot.state = 'idle'
+        except Exception as e:
+            print(f"ohno {e}")
+        print(f"Bot timeline values loaded: Season {bot.season}, Round {bot.round}, Channel {bot.channel}, State {bot.state}")
+
+async def set_state(bot, new_state):
+    """
+    Tries to change the state in the database. If successful, it also changes it on the bot.
+    """
+    try:
+        # Connect to the database and update the State field in the Timeline table
+        with sqlite3.connect('3cb.db') as conn:
+            cur = conn.cursor()
+            cur.execute("UPDATE Timeline SET State = ?", (new_state,))
+            conn.commit()
+            print(f"Database state updated to: {new_state}")
+        
+        # If successful, update the bot's state
+        bot.state = new_state
+        print(f"Bot state updated to: {bot.state}")
+        
+        return True  # Indicate success
+
+    except Exception as e:
+        print(f"Failed to update state: {e}")
+        return False  # Indicate failure

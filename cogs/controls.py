@@ -1,5 +1,6 @@
 from discord.ext import commands
 import utils
+import sqlite3
 
 class ControlCog(commands.Cog):
     def __init__(self, bot):
@@ -13,21 +14,53 @@ class ControlCog(commands.Cog):
         #only listen to me
         if message.author.id != 248740105248964608 or message.content[0] != "!":
             return
-        await message.channel.send(message.content)
-        # content = message.content.lower()
-        # if content.startswith('!help'):
-        #     await message.channel.send(utils.help())
-        # elif content.startswith('!rules'):
-        #     await message.channel.send(utils.rules())
-        # # elif self.bot.state == 'entriesopen':
-        # #     await self.receive_entry(message)
-        # # else:
-        # #     await message.channel.send("Sorry, entries are closed right now.")
-        # else:
-        #     await message.channel.send("Please use !help or !rules")
-        
-    async def receive_entry(self, message):
-        pass
+        if message.content.startswith('!getstate'):
+            await self.get_state(message)
+        if message.content.startswith('!setstate'):
+            new_state = message.content[len('!setstate '):].strip()
+            if len(new_state) == 0:
+                await message.channel.send(f"Please enter a state")
+            else:
+                await utils.set_state(new_state)
+        if message.content.startswith('!newround'):
+            await self.new_round()
+        elif message.content.startswith('!channel'):
+            await self.set_channel(message)
+
+    async def get_state(self, message):
+        await message.channel.send(f"Bot state: {self.bot.state}")
+
+    async def new_round(self):
+        self.bot.round += 1
+        print(f"Starting round {self.bot.round}")
+        self.bot.entries.clear()
+        print("Cleared entries")
+        utils.set_state('entriesopen')
+        print(f"Bot status: {self.bot.state}")
+
+    async def set_channel(self, message):
+        try:
+            channel_id = int(message.content[len('!channel '):].strip())
+        except ValueError:
+            await message.channel.send("Invalid channel ID. Please provide a valid numeric channel ID.")
+            return
+
+        channel = self.bot.get_channel(channel_id)
+        if channel is None:
+            await message.channel.send("Invalid channel ID. Please provide a valid channel ID.")
+            return
+
+        self.bot.channel = channel
+
+        # Store the channel ID in the database
+        try:
+            with sqlite3.connect('3cb.db') as conn:
+                cur = conn.cursor()
+                cur.execute('''UPDATE Timeline SET Channel = ?''', (channel_id,))
+                conn.commit()
+            print(f"Channel set to {channel.mention} for the competition.")
+        except Exception as e:
+            print("An error occurred while setting the channel.")
 
 
 async def setup(bot):

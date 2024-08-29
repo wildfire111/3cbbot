@@ -12,7 +12,7 @@ import utils
 load_dotenv()
 #print("Environment variables loaded:", os.environ)
 token = os.getenv('BOT_KEY')
-print(token)
+#print(token)
 
 intents = discord.Intents.all()
 intents.message_content = True
@@ -44,7 +44,8 @@ async def on_ready():
     utils.load_entries_from_db(bot)
     print("Starting DB management task")
     asyncio.create_task(utils.add_entries_to_db(bot))
-    bot.state = 'entriesopen'
+    print("Loading state")
+    utils.load_timeline_values(bot)
     print(f"Bot state: {bot.state}")
     
 
