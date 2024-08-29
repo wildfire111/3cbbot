@@ -31,6 +31,15 @@ class ControlCog(commands.Cog):
         await message.channel.send(f"Bot state: {self.bot.state}")
 
     async def new_round(self):
+        try:
+            with sqlite3.connect('3cb.db') as conn:
+                cur = conn.cursor()
+                cur.execute("UPDATE Timeline SET CurRound = CurRound + 1")
+                conn.commit()
+                print("Database round number incremented.")
+        except Exception as e:
+            print(f"Error updating round number in database: {e}")
+            return
         self.bot.round += 1
         print(f"Starting round {self.bot.round}")
         self.bot.entries.clear()
