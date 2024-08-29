@@ -4,6 +4,7 @@
 import sqlite3
 from EntryCards import EntryCards
 import asyncio
+from Battle import Battle
 
 def initialise_db():
     """
@@ -11,24 +12,33 @@ def initialise_db():
     """
     # SQL commands to create necessary tables
     tables_to_create = [
-        ('Points', '''CREATE TABLE "Points" (
-                        "Card" TEXT, 
-                        "Points" INTEGER
-                      );'''),
-        ('Timeline', '''CREATE TABLE "Timeline" (
-                            "CurSeason" INTEGER, 
-                            "CurRound" INTEGER, 
-                            "Entries" INTEGER, 
-                            "Channel" INTEGER, 
-                            "State" TEXT
-                        );'''),
-        ('UserCardEntries', '''CREATE TABLE "UserCardEntries" (
-                                "DiscordID" TEXT UNIQUE PRIMARY KEY, 
-                                "Cards" TEXT, 
-                                "CardsText" TEXT, 
-                                "CardImages" TEXT
-                               );''')
-    ]
+    ('Points', '''CREATE TABLE "Points" (
+                    "Card" TEXT, 
+                    "Points" INTEGER
+                  );'''),
+    ('Timeline', '''CREATE TABLE "Timeline" (
+                        "CurSeason" INTEGER, 
+                        "CurRound" INTEGER, 
+                        "Entries" INTEGER, 
+                        "Channel" INTEGER, 
+                        "State" TEXT
+                    );'''),
+    ('UserCardEntries', '''CREATE TABLE "UserCardEntries" (
+                            "DiscordID" TEXT UNIQUE PRIMARY KEY, 
+                            "Cards" TEXT, 
+                            "CardsText" TEXT, 
+                            "CardImages" TEXT
+                           );'''),
+    ('Battles', '''CREATE TABLE "Battles" (
+                    "BattleID" INTEGER PRIMARY KEY AUTOINCREMENT,
+                    "Player1ID" TEXT,
+                    "Player2ID" TEXT,
+                    "Resolved" INTEGER,
+                    "PointsPlayer1" INTEGER,
+                    "PointsPlayer2" INTEGER,
+                    "PostID" TEXT
+                   );''')
+]
     
     # Use context manager to handle connection and cursor
     with sqlite3.connect('3cb.db') as conn:
@@ -51,20 +61,45 @@ def load_entries_from_db(bot):
     """
     Loads all user entries from the database and creates EntryCards objects with in_db=True,
     then stores them in bot.entries using the user's Discord ID as the key.
+    Also loads all battles from the database and creates Battle objects, storing them in bot.battles.
     """
+    # Initialize bot entries and battles
+    bot.entries = {}
+    bot.battles = []
+
     with sqlite3.connect('3cb.db') as conn:
         cur = conn.cursor()
+
+        # Load user entries
         cur.execute("SELECT DiscordID, Cards, CardsText, CardImages FROM UserCardEntries")
         rows = cur.fetchall()
-        
         for row in rows:
             discord_id, cards, cardstext, cardimages = row
             # Create EntryCards object with in_db=True
             entry = EntryCards(discord_id, cards.split(','), cardstext.split(','), cardimages.split(','), in_db=True)
             # Store in bot.entries dictionary with Discord ID as the key
             bot.entries[str(discord_id)] = entry
-    
-    print(f"Loaded {len(bot.entries)} entries from the database.")
+
+        print(f"Loaded {len(bot.entries)} entries from the database.")
+
+        # Load battles
+        cur.execute("SELECT BattleID, Player1ID, Player2ID, Resolved, PointsPlayer1, PointsPlayer2, PostID FROM Battles")
+        battles = cur.fetchall()
+        for battle_row in battles:
+            battle_id, player1_id, player2_id, resolved, points_player1, points_player2, post_id = battle_row
+            # Create Battle object
+            battle = Battle(
+                player1_id=player1_id,
+                player2_id=player2_id,
+                resolved=bool(resolved),
+                points_player1=points_player1,
+                points_player2=points_player2,
+                post_id=post_id
+            )
+            # Store in bot.battles list
+            bot.battles.append(battle)
+        
+        print(f"Loaded {len(bot.battles)} battles from the database.")
 
 
 async def add_entries_to_db(bot):

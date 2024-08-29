@@ -1,6 +1,8 @@
 from discord.ext import commands
 import utils
 import sqlite3
+import pairing
+import tests
 
 class ControlCog(commands.Cog):
     def __init__(self, bot):
@@ -24,6 +26,10 @@ class ControlCog(commands.Cog):
                 await utils.set_state(new_state)
         if message.content.startswith('!newround'):
             await self.new_round()
+        if message.content.startswith('!pair'):
+            await self.pairings()
+        if message.content.startswith('!fakeentries'):
+            tests.simulate_entries(self.bot)
         elif message.content.startswith('!channel'):
             await self.set_channel(message)
 
@@ -46,6 +52,39 @@ class ControlCog(commands.Cog):
         print("Cleared entries")
         utils.set_state('entriesopen')
         print(f"Bot status: {self.bot.state}")
+
+    async def pairings(self):
+        """
+        Generates all possible pairings using generate_pairings and enters them into the database.
+        Overwrites the bot.battles with the new pairings.
+        """
+        # Generate pairings (Battle objects)
+        battles = pairing.generate_pairings(self.bot)
+        
+        try:
+            # Open a database connection
+            with sqlite3.connect('3cb.db') as conn:
+                cur = conn.cursor()
+                
+                # Loop through each battle and insert into the database
+                for battle in battles:
+                    # Insert the battle into the Battles table
+                    cur.execute('''INSERT INTO Battles (Player1ID, Player2ID, Resolved, PointsPlayer1, PointsPlayer2, PostID)
+                                VALUES (?, ?, ?, ?, ?, ?)''',
+                                (battle.player1_id, battle.player2_id, int(battle.resolved), 
+                                battle.points_player1, battle.points_player2, battle.post_id))
+                
+                # Commit the changes to the database
+                conn.commit()
+                print(f"Inserted {len(battles)} pairings into the database.")
+            
+            # Overwrite bot.battles with the new battles
+            self.bot.battles = battles
+            print(f"Bot battles have been updated with {len(self.bot.battles)} new battles.")
+            utils.set_state(self.bot,'paired')
+        except Exception as e:
+            print(f"Error inserting pairings into the database: {e}")
+        
 
     async def set_channel(self, message):
         try:
