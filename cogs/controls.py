@@ -69,10 +69,10 @@ class ControlCog(commands.Cog):
                 # Loop through each battle and insert into the database
                 for battle in battles:
                     # Insert the battle into the Battles table
-                    cur.execute('''INSERT INTO Battles (Player1ID, Player2ID, Resolved, PointsPlayer1, PointsPlayer2, PostID)
-                                VALUES (?, ?, ?, ?, ?, ?)''',
+                    cur.execute('''INSERT INTO Battles (Player1ID, Player2ID, Resolved, PointsPlayer1, PointsPlayer2)
+                                VALUES (?, ?, ?, ?, ?)''',
                                 (battle.player1_id, battle.player2_id, int(battle.resolved), 
-                                battle.points_player1, battle.points_player2, battle.post_id))
+                                battle.points_player1, battle.points_player2))
                 
                 # Commit the changes to the database
                 conn.commit()
