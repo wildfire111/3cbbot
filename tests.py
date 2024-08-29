@@ -11,7 +11,7 @@ def simulate_entries(bot):
     bot.entries.clear()
 
     # Placeholder Discord IDs and card data
-    discord_ids = [f"{i}" for i in range(10000, 99999)]
+    discord_ids = [f"{i}" for i in range(90,99)]
     card_names = ["CardA", "CardB", "CardC"]
 
     for discord_id in discord_ids:
