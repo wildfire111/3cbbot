@@ -1,17 +1,18 @@
+import os
+import asyncio
+import logging
+import sqlite3
+from dotenv import load_dotenv
+import requests
 import discord
 from discord.ext import commands
 from discord.utils import get
-import sqlite3
-import asyncio
-import logging
-import requests
-import os
-from dotenv import load_dotenv
 import utils
 
 load_dotenv()
 #print("Environment variables loaded:", os.environ)
 token = os.getenv('BOT_KEY')
+
 #print(token)
 
 intents = discord.Intents.all()
@@ -20,6 +21,7 @@ intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.state = 'startup'
 cogs = ['cogs.entries','cogs.controls','cogs.voting']
+bot.admin = os.getenv('ADMIN_ID')
 
 async def main():
     print("Bot starting")

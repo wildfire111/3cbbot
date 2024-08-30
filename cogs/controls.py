@@ -2,7 +2,7 @@ from discord.ext import commands
 import utils
 import sqlite3
 import pairing
-import tests
+import testinput
 
 class ControlCog(commands.Cog):
     def __init__(self, bot):
@@ -15,42 +15,45 @@ class ControlCog(commands.Cog):
             return
         
         #only listen to me
-        if message.author.id != 248740105248964608 or message.content[0] != "!":
+        if message.author.id != self.bot.admin or message.content[0] != "!":
             return
         
         if message.content.startswith('!getstate'):
             await self.get_state(message)
 
-        if message.content.startswith('!setstate'):
+        elif message.content.startswith('!setstate'):
             new_state = message.content[len('!setstate '):].strip()
             if len(new_state) == 0:
                 await message.channel.send(f"Please enter a state")
             else:
                 await utils.set_state(self.bot,new_state)
-        if message.content.startswith('!newround'):
+        elif message.content.startswith('!newround'):
             await self.new_round()
 
-        if message.content.startswith('!pair'):
+        elif message.content.startswith('!pair'):
             await utils.set_state(self.bot,'pairing')
             await self.pairings()
 
-        if message.content.startswith('!vote'):
+        elif message.content.startswith('!vote'):
             voting_cog = self.bot.get_cog('VotingCog')
             print(f"Outputting {len(self.bot.battles)} battles in {self.bot.channel}")
             await voting_cog.output_battles()
 
-        if message.content.startswith('!deleteposts'):
+        elif message.content.startswith('!deleteposts'):
             voting_cog = self.bot.get_cog('VotingCog')
             print(f"Deleting battles in {self.bot.channel}")
             await voting_cog.delete_all_posts()
             
 
-        if message.content.startswith('!fakeentries'):
+        elif message.content.startswith('!fakeentries'):
             print("faking entries")
-            tests.simulate_entries(self.bot)
+            testinput.simulate_entries(self.bot)
 
         elif message.content.startswith('!channel'):
             await self.set_channel(message)
+
+        elif message.content.startswith('!manualscore'):
+            await self.manual_score(message)
 
     async def get_state(self, message):
         await message.channel.send(f"Bot state: {self.bot.state}")
@@ -120,6 +123,49 @@ class ControlCog(commands.Cog):
 
         self.bot.channel = channel
         await channel.send("Channel set")
+    
+    async def manual_score(self, message):
+        """
+        Manually resolves a battle using the given emoji and battle ID.
+        
+        Usage: !manualscore {emoji} {battleid}
+        """
+        parts = message.content.split()
+        if len(parts) != 3:
+            await message.channel.send("Usage: !manualscore {emoji} {battleid}")
+            return
+
+        emoji = parts[1]
+        try:
+            battle_id = int(parts[2])
+        except ValueError:
+            await message.channel.send("Invalid battle ID. Please enter a valid number.")
+            return
+
+        # Find the battle with the given battle_id
+        battle = next((b for b in self.bot.battles if str(b.battle_id) == str(battle_id)), None)
+        
+        if not battle:
+            await message.channel.send(f"Battle with ID {battle_id} not found.")
+            return
+
+        # Check if the emoji is valid
+        valid_emojis = ["🅰️", "⬅️", "🆎", "❌", "➡️", "🅱️"]
+        if emoji not in valid_emojis:
+            await message.channel.send("Invalid emoji. Please use a valid emoji to score the battle.")
+            return
+
+        # Resolve the battle using the VotingCog's resolve method
+        voting_cog = self.bot.get_cog("VotingCog")
+        if voting_cog:
+            await voting_cog.resolve(emoji, battle)
+            print("flag1")
+            message_to_clear = await self.bot.channel.fetch_message(battle.post_id)
+            print("flag3")
+            await message_to_clear.clear_reactions()
+            print(f"Battle {battle_id} resolved and reactions cleared.")
+        else:
+            print("Error: no voting cog.")
 
 
 async def setup(bot):
