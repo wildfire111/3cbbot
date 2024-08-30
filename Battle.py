@@ -17,6 +17,7 @@ class Battle:
         self.points_player1 = points_player1
         self.points_player2 = points_player2
         self.in_db = in_db
+        self.battle_id = self.player1_id + self.player2_id
 
     def resolve_battle(self, points_player1, points_player2):
         """
