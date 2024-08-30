@@ -2,3 +2,5 @@
 .env
 *.db
 images/
+__pycache__/
+*.pyc
