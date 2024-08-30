@@ -18,8 +18,7 @@ def initialise_db():
                         );'''),
             ('Timeline', '''CREATE TABLE "Timeline" (
                                 "CurSeason" INTEGER, 
-                                "CurRound" INTEGER, 
-                                "Entries" INTEGER, 
+                                "CurRound" INTEGER,
                                 "Channel" INTEGER, 
                                 "State" TEXT
                             );'''),
@@ -30,7 +29,8 @@ def initialise_db():
                                     "CardImages" TEXT
                                 );'''),
             ('Battles', '''CREATE TABLE "Battles" (
-                            "BattleID" INTEGER PRIMARY KEY AUTOINCREMENT,
+                            "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
+                            "BattleID" INTEGER UNIQUE,
                             "Player1ID" TEXT,
                             "Player2ID" TEXT,
                             "Resolved" INTEGER,
@@ -83,10 +83,10 @@ def load_entries_from_db(bot):
             print(f"Loaded {len(bot.entries)} entries from the database.")
 
             # Load battles
-            cur.execute("SELECT BattleID, Player1ID, Player2ID, Resolved, PointsPlayer1, PointsPlayer2 FROM Battles")
+            cur.execute("SELECT BattleID, Player1ID, Player2ID, Resolved, PointsPlayer1, PointsPlayer2, PostID FROM Battles")
             battles = cur.fetchall()
             for battle_row in battles:
-                battle_id, player1_id, player2_id, resolved, points_player1, points_player2 = battle_row
+                battle_id, player1_id, player2_id, resolved, points_player1, points_player2, post_id = battle_row
                 # Create Battle object
                 battle = Battle(
                     player1_id=player1_id,
@@ -95,6 +95,7 @@ def load_entries_from_db(bot):
                     points_player1=points_player1,
                     points_player2=points_player2,
                 )
+                battle.post_id = post_id if post_id is not None else battle.post_id
                 # Store in bot.battles list
                 bot.battles.append(battle)
             
@@ -103,11 +104,11 @@ def load_entries_from_db(bot):
         print(f'Error loading from DB: {e}')
 
 
-async def add_entries_to_db(bot):
+async def archivist(bot):
     """
-    Periodically checks bot.entries for entries that have in_db=False,
-    adds them to the database, and updates their in_db status.
+    Syncs current bot state to the DB in case of failure.
     """
+    prev_hash = None
     while True:
         if bot.state == 'entriesopen':
             for discord_id, entry in bot.entries.items():
@@ -117,7 +118,7 @@ async def add_entries_to_db(bot):
                         cur = conn.cursor()
                         cur.execute('''INSERT OR REPLACE INTO UserCardEntries (DiscordID, Cards, CardsText, CardImages)
                                     VALUES (?, ?, ?, ?)''', 
-                                    (entry.user, ','.join(entry.cards), ','.join(entry.cardstext), ','.join(entry.cardimages)))
+                                    (entry.user, ','.join(entry.cards), ','.join(entry.cardstext), ','.join(entry.cardsimages)))
                         conn.commit()
                     
                     # Fetch the user object to get the username
@@ -131,7 +132,31 @@ async def add_entries_to_db(bot):
                     entry.in_db = True
             
         # Wait for 15 seconds before scanning again
-        await asyncio.sleep(15)
+        timeline_state = (bot.season, bot.round, bot.channel.id if bot.channel is not None else 0, bot.state)
+        curr_hash = hash(timeline_state)
+        if prev_hash is None:
+            prev_hash = curr_hash
+        # Generate a new hash using the built-in hash function
+        
+
+        # Check if the timeline state has changed by comparing hashes
+        if curr_hash != prev_hash:
+            # Update the Timeline table with the current bot state
+            try:
+                with sqlite3.connect('3cb.db') as conn:
+                    cur = conn.cursor()
+                    cur.execute('''UPDATE Timeline SET 
+                                    CurSeason = ?, 
+                                    CurRound = ?, 
+                                    Channel = ?, 
+                                    State = ?''',
+                                (bot.season, bot.round, bot.channel.id if bot.channel is not None else 0, bot.state))
+                    conn.commit()
+                    print("Timeline table updated with the current bot state.")
+            except Exception as e:
+                print(f"Error updating Timeline table: {e}")
+            prev_hash = curr_hash
+        await asyncio.sleep(1)
 
 def load_timeline_values(bot):
         """Loads values from the Timeline table and sets them as attributes on the bot."""
@@ -144,13 +169,13 @@ def load_timeline_values(bot):
                     # Set bot attributes
                     bot.season = result[0]
                     bot.round = result[1]
-                    bot.channel = result[2]
+                    bot.channel = bot.get_channel(result[2])
                     bot.state = result[3]
                 else:
                     # Set default values if nothing is found
                     bot.season = 0
                     bot.round = 0
-                    bot.channel = None
+                    bot.channel = bot.get_channel(993978824213672059)
                     bot.state = 'idle'
         except Exception as e:
             print(f"ohno {e}")
@@ -158,22 +183,8 @@ def load_timeline_values(bot):
 
 async def set_state(bot, new_state):
     """
-    Tries to change the state in the database. If successful, it also changes it on the bot.
+    Change the state on the bot.
     """
-    try:
-        # Connect to the database and update the State field in the Timeline table
-        with sqlite3.connect('3cb.db') as conn:
-            cur = conn.cursor()
-            cur.execute("UPDATE Timeline SET State = ?", (new_state,))
-            conn.commit()
-            print(f"Database state updated to: {new_state}")
-        
-        # If successful, update the bot's state
-        bot.state = new_state
-        print(f"Bot state updated to: {bot.state}")
-        
-        return True  # Indicate success
 
-    except Exception as e:
-        print(f"Failed to update state: {e}")
-        return False  # Indicate failure
+    bot.state = new_state
+    print(f"Bot state updated to: {bot.state}")

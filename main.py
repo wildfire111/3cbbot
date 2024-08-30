@@ -19,7 +19,7 @@ intents.message_content = True
 intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.state = 'startup'
-cogs = ['cogs.entries','cogs.controls']
+cogs = ['cogs.entries','cogs.controls','cogs.voting']
 
 async def main():
     print("Bot starting")
@@ -39,16 +39,19 @@ async def on_ready():
     print("Synching commands")
     # user = await bot.fetch_user(248740105248964608)
     # await user.send("Bot online.")
-    await bot.tree.sync()
+    # try:
+    #     await bot.tree.sync() #UNCOMMENT BEFORE PROD
+    # except Exception as e:
+    #     ValueError(f"Sync error: {e}")
     bot.battles = []
     bot.entries = {}
     print("Loading DB")
     utils.load_entries_from_db(bot)
-    print("Starting DB management task")
-    asyncio.create_task(utils.add_entries_to_db(bot))
     print("Loading state")
     utils.load_timeline_values(bot)
-    print(f"Bot state: {bot.state}")
+    print("Starting archivist")
+    asyncio.create_task(utils.archivist(bot))
+    print("startup complete")
     
 
 

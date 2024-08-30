@@ -10,6 +10,7 @@ python = "^3.10"
 discord = "^2.3.2"
 requests = "^2.32.3"
 python-dotenv = "^1.0.1"
+pillow = "^10.4.0"
 
 
 [build-system]
