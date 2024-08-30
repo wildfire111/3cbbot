@@ -12,33 +12,33 @@ def initialise_db():
     """
     # SQL commands to create necessary tables
     tables_to_create = [
-            ('Points', '''CREATE TABLE "Points" (
-                            "Card" TEXT, 
-                            "Points" INTEGER
+        ('Timeline', '''CREATE TABLE "Timeline" (
+                            "CurSeason" INTEGER, 
+                            "CurRound" INTEGER,
+                            "Channel" INTEGER, 
+                            "State" TEXT
                         );'''),
-            ('Timeline', '''CREATE TABLE "Timeline" (
-                                "CurSeason" INTEGER, 
-                                "CurRound" INTEGER,
-                                "Channel" INTEGER, 
-                                "State" TEXT
+        ('UserCardEntries', '''CREATE TABLE "UserCardEntries" (
+                                "DiscordID" TEXT UNIQUE PRIMARY KEY, 
+                                "Cards" TEXT, 
+                                "CardsText" TEXT, 
+                                "CardImages" TEXT
                             );'''),
-            ('UserCardEntries', '''CREATE TABLE "UserCardEntries" (
-                                    "DiscordID" TEXT UNIQUE PRIMARY KEY, 
-                                    "Cards" TEXT, 
-                                    "CardsText" TEXT, 
-                                    "CardImages" TEXT
-                                );'''),
-            ('Battles', '''CREATE TABLE "Battles" (
-                            "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
-                            "BattleID" INTEGER UNIQUE,
-                            "Player1ID" TEXT,
-                            "Player2ID" TEXT,
-                            "Resolved" INTEGER,
-                            "PointsPlayer1" INTEGER,
-                            "PointsPlayer2" INTEGER,
-                            "PostID" TEXT
+        ('Battles', '''CREATE TABLE "Battles" (
+                        "ID" INTEGER PRIMARY KEY AUTOINCREMENT,
+                        "BattleID" INTEGER UNIQUE,
+                        "Player1ID" TEXT,
+                        "Player2ID" TEXT,
+                        "Resolved" INTEGER,
+                        "PointsPlayer1" INTEGER,
+                        "PointsPlayer2" INTEGER,
+                        "PostID" TEXT
+                    );'''),
+        ('Standings', '''CREATE TABLE "Standings" (
+                            "PlayerID" TEXT PRIMARY KEY, 
+                            "Points" INTEGER
                         );''')
-        ]
+    ]
     
     # Use context manager to handle connection and cursor
     with sqlite3.connect('3cb.db') as conn:
