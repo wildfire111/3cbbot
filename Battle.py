@@ -1,4 +1,7 @@
 class Battle:
+    """
+    A class to represent a battle between two players' decks.
+    """
     def __init__(self, player1_id, player2_id, resolved=False, points_player1=0, points_player2=0, in_db=False):
         """
         Initializes a Battle instance with the given players and status.
@@ -30,12 +33,6 @@ class Battle:
         self.points_player1 = points_player1
         self.points_player2 = points_player2
         self.resolved = True
-
-    def mark_as_in_db(self):
-        """
-        Marks the battle as being saved in the database.
-        """
-        self.in_db = True
 
     def __repr__(self):
         """

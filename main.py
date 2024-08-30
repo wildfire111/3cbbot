@@ -9,53 +9,65 @@ from discord.ext import commands
 from discord.utils import get
 import utils
 
+# Load environment variables
 load_dotenv()
-#print("Environment variables loaded:", os.environ)
 token = os.getenv('BOT_KEY')
+admin_id = os.getenv('ADMIN_ID')
 
-#print(token)
+# Configure logging to print to console with timestamps
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
+# Configure bot intents
 intents = discord.Intents.all()
 intents.message_content = True
 intents.members = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+
+bot = commands.Bot(command_prefix='&', intents=intents)
 bot.state = 'startup'
-cogs = ['cogs.entries','cogs.controls','cogs.voting']
-bot.admin = os.getenv('ADMIN_ID')
+bot.admin = admin_id
+
+# Constants
+COGS = ['cogs.entries', 'cogs.controls', 'cogs.voting']
 
 async def main():
-    print("Bot starting")
-    for cog in cogs:
+    logging.info("Bot starting")
+    for cog in COGS:
         try:
             await bot.load_extension(cog)
-            print(f"Loaded {cog}")
+            logging.info(f"Loaded {cog}")
         except Exception as e:
-            print(f"Failed to load {cog}: {e}")
+            logging.error(f"Failed to load {cog}: {e}")
+    
     utils.initialise_db()
     await bot.start(token)
-    
 
 @bot.event
 async def on_ready():
     bot.state = 'startup'
-    print("Synching commands")
-    # user = await bot.fetch_user(248740105248964608)
-    # await user.send("Bot online.")
-    # try:
-    #     await bot.tree.sync() #UNCOMMENT BEFORE PROD
-    # except Exception as e:
-    #     ValueError(f"Sync error: {e}")
+    logging.info("Synching commands")
+    
+    try:
+        await bot.tree.sync()
+    except Exception as e:
+        logging.error(f"Sync error: {e}")
+
     bot.battles = []
     bot.entries = {}
-    print("Loading DB")
-    utils.load_entries_from_db(bot)
-    print("Loading state")
-    utils.load_timeline_values(bot)
-    print("Starting archivist")
-    asyncio.create_task(utils.archivist(bot))
-    print("startup complete")
     
-
+    logging.info("Loading from DB")
+    utils.load_entries_from_db(bot)
+    
+    logging.info("Loading state")
+    utils.load_timeline_values(bot)
+    
+    logging.info("Starting archivist")
+    asyncio.create_task(utils.archivist(bot))
+    
+    logging.info("Startup complete")
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -2,8 +2,13 @@ from PIL import Image
 import io
 import os
 import requests
+import logging
+from typing import List, Optional
 
-def combine_and_resize_images(image_urls):
+# Setup logging configuration
+logging.basicConfig(level=logging.INFO)
+
+def combine_and_resize_images(image_urls: List[str]) -> Optional[Image.Image]:
     """
     Combines multiple images from URLs horizontally and resizes the result to a width of 200px while preserving the aspect ratio.
     Images are checked for existence in the /images directory and downloaded if not found.
@@ -30,7 +35,10 @@ def combine_and_resize_images(image_urls):
             image = Image.open(image_path)
             images.append(image)
     except requests.exceptions.RequestException as e:
-        print(f"Error downloading image: {e}")
+        logging.error(f"Error downloading image: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"Unexpected error: {e}")
         return None
 
     # Calculate total width and max height for the new combined image
@@ -48,14 +56,14 @@ def combine_and_resize_images(image_urls):
         image.close()  # Close the image to release memory
 
     # Resize the combined image
-    new_width = 500
+    NEW_WIDTH = 200
     aspect_ratio = combined_image.height / combined_image.width
-    new_height = int(new_width * aspect_ratio)
-    resized_image = combined_image.resize((new_width, new_height), Image.LANCZOS)
+    new_height = int(NEW_WIDTH * aspect_ratio)
+    resized_image = combined_image.resize((NEW_WIDTH, new_height), Image.LANCZOS)
 
     return resized_image
 
-def image_to_bytes(image):
+def image_to_bytes(image: Image.Image) -> io.BytesIO:
     """
     Converts a PIL image to a bytes object for Discord file uploading.
     """
